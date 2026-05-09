@@ -163,9 +163,9 @@ async def handle_search(btn, school: str, major: str, supervisor_names_str: str,
                     return
                 try:
                     with result_container:
-                        ui.label('查询结果如下：').classes('text-h5 q-mb-md')
-
                         if event["mode"] == "detail":
+                            with ui.row().classes('items-center gap-3 q-mb-md'):
+                                ui.label('查询结果').classes('result-header')
                             create_supervisor_cards_with_export(
                                 event["supervisors"],
                                 school=school,
@@ -173,10 +173,13 @@ async def handle_search(btn, school: str, major: str, supervisor_names_str: str,
                                 names=supervisor_names
                             )
                             if not event["supervisors"]:
-                                ui.label('未找到匹配的导师信息').classes('text-grey-7')
+                                with ui.row().classes('justify-center q-pa-xl'):
+                                    ui.label('未找到匹配的导师信息').classes('text-grey-6 text-body1')
                         else:
                             if event["supervisors"]:
-                                ui.label(f'共找到 {len(event["supervisors"])} 位导师').classes('text-subtitle1 q-mb-sm')
+                                with ui.row().classes('items-center gap-3 q-mb-md'):
+                                    ui.label('查询结果').classes('result-header')
+                                    ui.label(f'共 {len(event["supervisors"])} 位').classes('stat-count')
                                 create_supervisor_table(
                                     event["supervisors"],
                                     school=school,
@@ -184,7 +187,8 @@ async def handle_search(btn, school: str, major: str, supervisor_names_str: str,
                                     names=supervisor_names
                                 )
                             else:
-                                ui.label('未找到导师列表').classes('text-grey-7')
+                                with ui.row().classes('justify-center q-pa-xl'):
+                                    ui.label('未找到导师列表').classes('text-grey-6 text-body1')
                 except RuntimeError as e:
                     logger.warning("result_render_failed", error=str(e))
                     return
@@ -221,40 +225,83 @@ async def handle_search(btn, school: str, major: str, supervisor_names_str: str,
 
 @ui.page('/')
 def index():
-    ui.colors(primary='#1976D2')
+    ui.colors(primary='#1565C0')
+    ui.add_head_html('''
+        <style>
+            html, body, #c0, .nicegui-content { height: 100%; margin: 0; }
+        </style>
+    ''')
+    ui.add_css('''
+        .header-bar {
+            background: linear-gradient(135deg, #1565C0 0%, #1976D2 100%);
+            padding: 12px 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .header-bar .q-btn {
+            color: #fff !important;
+            font-weight: 500 !important;
+        }
+        .page-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1565C0;
+            letter-spacing: 2px;
+        }
+        .result-header {
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: #37474F;
+            border-left: 3px solid #1565C0;
+            padding-left: 12px;
+        }
+        .stat-count {
+            background: #E3F2FD;
+            color: #1565C0;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+    ''')
 
     if not app.storage.user.get('authenticated'):
-        with ui.column().classes('w-full items-center'):
-            ui.label('博导建联').classes('text-h3 q-mt-xl')
-            ui.label('请输入用户名和密码登录').classes('text-body1 text-grey-7 q-mt-sm q-mb-md')
+        with ui.element('div').style('position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; background: #f5f7fa;'):
+            with ui.card().classes('q-pa-xl').style('width: 380px; max-width: 90vw; border-radius: 12px; box-shadow: 0 8px 40px rgba(0,0,0,0.12);'):
+                with ui.column().classes('items-center w-full'):
+                    ui.icon('school').classes('text-h3 q-mb-sm').props('color=primary')
+                    ui.label('博导建联').classes('text-h5 text-weight-bold q-mb-xs')
+                    ui.label('博士生导师信息查询平台').classes('text-body2 text-grey-6 q-mb-lg')
 
-            username_input = ui.input('用户名').classes('q-mb-sm').props('outlined')
-            password_input = ui.input('密码').props('type=password outlined')
-            error_label = ui.label('').classes('text-red-5 text-body2 q-mt-sm')
+                    username_input = ui.input('用户名').classes('w-full q-mb-sm').props('outlined dense')
+                    password_input = ui.input('密码').classes('w-full').props('type=password outlined dense')
+                    error_label = ui.label('').classes('text-red-5 text-body2 q-mt-sm')
 
-            async def do_login():
-                if username_input.value == 'admin' and password_input.value == PHD_LOGIN_PASSWORD:
-                    app.storage.user['authenticated'] = True
-                    ui.navigate.reload()
-                else:
-                    error_label.set_text('用户名或密码错误')
+                    async def do_login():
+                        if username_input.value == 'admin' and password_input.value == PHD_LOGIN_PASSWORD:
+                            app.storage.user['authenticated'] = True
+                            ui.navigate.reload()
+                        else:
+                            error_label.set_text('用户名或密码错误')
 
-            ui.button('登录', on_click=do_login).props('color=primary').classes('q-mt-md')
+                    ui.button('登 录', on_click=do_login).props('color=primary unelevated').classes('w-full q-mt-md').style('height: 42px; font-size: 1rem;')
         return
 
     def do_logout():
         app.storage.user.clear()
         ui.navigate.reload()
 
-    with ui.column().classes('w-full items-center'):
-        with ui.row().classes('w-full justify-between items-center'):
-            ui.label('博导建联').classes('text-h3 q-mt-lg')
-            ui.button('退出登录', on_click=do_logout).props('flat color=grey')
+    # 顶部导航栏
+    with ui.row().classes('header-bar w-full items-center justify-between'):
+        with ui.row().classes('items-center gap-2'):
+            ui.icon('school').props('color=white')
+            ui.label('博导建联').classes('text-h6 text-weight-medium').style('color: white;')
+        ui.button('退出登录', on_click=do_logout).props('flat dense').style('color: #fff !important; font-weight: 500;')
 
-        # Create search form first
-        # We'll pass the callback after creating UI elements
+    with ui.column().classes('w-full items-center q-px-md'):
+        # 搜索表单
         search_form_container = ui.column().classes('w-full')
 
+        # 加载状态
         with ui.column().classes('items-center q-mt-md'):
             loading_spinner = ui.spinner(size='lg').props('color=primary')
             loading_spinner.set_visibility(False)
@@ -263,9 +310,8 @@ def index():
             status_label = ui.label('').classes('text-grey-6 text-body2 q-mt-sm')
             status_label.set_visibility(False)
 
-        result_container = ui.column().classes('w-full q-mt-md q-px-md')
+        result_container = ui.column().classes('w-full q-mt-md')
 
-        # Now create the search form with callback
         with search_form_container:
             def make_search_callback():
                 async def callback(btn, school, major, names_str, level):

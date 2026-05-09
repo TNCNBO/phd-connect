@@ -13,22 +13,24 @@ from PhD_Connect.models.schemas import SupervisorInfo
 
 def create_search_form(on_search: Callable):
     """创建搜索表单，返回查询按钮"""
-    with ui.card().style('width: 100%; max-width: 1200px; margin: 20px auto;'):
-        ui.label('请填写查询条件，支持任意组合：学校 + 专业、单独专业（多校查询）、导师姓名（精确匹配）').classes('text-subtitle1 text-grey-7')
+    with ui.card().classes('q-pa-lg').style('width: 100%; max-width: 900px; margin: 24px auto; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.08);'):
+        with ui.row().classes('items-center gap-2 q-mb-md'):
+            ui.icon('search').props('color=primary size=sm')
+            ui.label('查询条件').classes('text-subtitle1 text-weight-medium')
+        ui.label('支持学校+专业组合查询、多校查询或导师姓名精确匹配').classes('text-body2 text-grey-6 q-mb-sm')
 
-        ui.separator()
-
-        with ui.row().classes('w-full gap-4 items-end'):
-            school_input = ui.input(label='学校', placeholder='请输入学校名称').classes('flex-1')
-            major_input = ui.input(label='专业', placeholder='请输入专业名称').classes('flex-1')
+        with ui.row().classes('w-full gap-4 items-end q-mb-md'):
+            school_input = ui.input(label='学校', placeholder='如：清华大学').props('outlined dense').classes('flex-1')
+            major_input = ui.input(label='专业', placeholder='如：计算机科学与技术').props('outlined dense').classes('flex-1')
             school_level_select = ui.select(
                 label='院校层次',
                 options=['无', '985', '211', '双非'],
                 value='无'
-            ).classes('flex-1')
-            search_btn = ui.button('查询').props('color=primary')
+            ).props('outlined dense').classes('flex-1')
+            search_btn = ui.button('查询', icon='search').props('color=primary unelevated').style('height: 40px;')
 
-        # 博导名字：动态输入框列表
+        # 博导名字区域
+        ui.separator().classes('q-mb-sm')
         supervisor_inputs = []
         supervisor_container = ui.column().classes('w-full gap-2')
 
@@ -36,38 +38,30 @@ def create_search_form(on_search: Callable):
             if len(supervisor_inputs) >= 5:
                 ui.notify('最多支持5位导师', type='warning')
                 return
-
             with supervisor_container:
                 with ui.row().classes('w-full gap-2 items-center'):
                     inp = ui.input(
-                        label=f'博导名字 {len(supervisor_inputs) + 1}',
-                        placeholder='请输入导师姓名'
-                    ).classes('flex-1')
+                        label=f'导师姓名 {len(supervisor_inputs) + 1}',
+                        placeholder='输入导师姓名可按姓名精确查找'
+                    ).props('outlined dense').classes('flex-1')
                     supervisor_inputs.append(inp)
-
-                    # 删除按钮
                     if len(supervisor_inputs) > 1:
                         def make_remove(input_ref, row_ref):
                             def remove():
                                 supervisor_inputs.remove(input_ref)
                                 row_ref.delete()
                             return remove
-
                         row_ref = inp.parent_slot.parent
-                        ui.button(icon='delete', on_click=make_remove(inp, row_ref)).props('flat color=negative')
+                        ui.button(icon='close', on_click=make_remove(inp, row_ref)).props('flat round dense color=negative')
 
-        # 初始添加一个输入框
         add_supervisor_input()
 
-        # 添加按钮
-        with ui.row().classes('w-full'):
-            ui.button('+ 添加导师', on_click=add_supervisor_input).props('flat color=primary')
+        with ui.row().classes('w-full q-mt-sm'):
+            ui.button('+ 添加导师', on_click=add_supervisor_input, icon='person_add').props('flat dense color=primary')
 
             async def _on_click():
-                # 收集所有非空的导师名字
                 names = [inp.value.strip() for inp in supervisor_inputs if inp.value and inp.value.strip()]
                 names_str = ','.join(names)
-                # 如果选择了"无"，传 None
                 level = school_level_select.value if school_level_select.value != '无' else None
                 await on_search(
                     search_btn,
@@ -153,24 +147,43 @@ def _export_pdf(supervisors: List[SupervisorInfo]) -> bytes:
 
 def create_supervisor_card(supervisor: SupervisorInfo):
     """创建导师详情卡片"""
-    with ui.card().classes('w-full'):
-        ui.label(f'{supervisor.name}').classes('text-h5')
-        ui.separator()
+    with ui.card().classes('q-pa-lg').style('width: 100%; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.06);'):
+        with ui.row().classes('items-center gap-3 q-mb-md'):
+            ui.icon('person').props('color=primary size=md')
+            with ui.column().classes('gap-0'):
+                ui.label(supervisor.name).classes('text-h6 text-weight-medium')
+                ui.label(f'{supervisor.title}  |  {supervisor.college}').classes('text-body2 text-grey-7')
 
-        with ui.column().classes('gap-2'):
-            ui.label(f'职称：{supervisor.title}')
-            ui.label(f'所属学校：{supervisor.school} ({supervisor.school_level})')
-            ui.label(f'所属院系：{supervisor.college}')
-            ui.label(f'研究方向：{supervisor.research_direction}')
-            if supervisor.phone:
-                ui.label(f'电话：{supervisor.phone}')
-            if supervisor.email:
-                ui.label(f'邮箱：{supervisor.email}')
-            if supervisor.homepage:
-                with ui.row().classes('gap-1 items-center'):
-                    ui.label('个人主页：')
-                    ui.link(supervisor.homepage, supervisor.homepage, new_tab=True)
-            ui.label(f'招生信息：{supervisor.recruitment_info if supervisor.recruitment_info else "暂无"}')
+        ui.separator().classes('q-mb-md')
+
+        fields = [
+            ('business', '所属学校', f'{supervisor.school} ({supervisor.school_level})'),
+            ('science', '研究方向', supervisor.research_direction),
+            ('info', '招生信息', supervisor.recruitment_info or '暂无'),
+        ]
+        for icon_name, label, value in fields:
+            with ui.row().classes('items-center gap-3 q-mb-sm'):
+                ui.icon(icon_name).props('color=grey-6 size=sm')
+                ui.label(label).classes('text-caption text-grey-6')
+                ui.label(value).classes('text-body2 text-weight-medium')
+
+        # 联系方式
+        has_contact = supervisor.phone or supervisor.email or supervisor.homepage
+        if has_contact:
+            ui.separator().classes('q-mb-sm')
+            with ui.row().classes('gap-4'):
+                if supervisor.phone:
+                    with ui.row().classes('items-center gap-1'):
+                        ui.icon('call').props('color=green size=xs')
+                        ui.label(supervisor.phone).classes('text-body2')
+                if supervisor.email:
+                    with ui.row().classes('items-center gap-1'):
+                        ui.icon('email').props('color=blue size=xs')
+                        ui.label(supervisor.email).classes('text-body2')
+                if supervisor.homepage:
+                    with ui.row().classes('items-center gap-1'):
+                        ui.icon('link').props('color=purple size=xs')
+                        ui.link(supervisor.homepage, supervisor.homepage, new_tab=True).classes('text-body2')
 
 
 def create_supervisor_cards_with_export(supervisors: List[SupervisorInfo], school: str = None, major: str = None, names: list = None):
@@ -187,12 +200,11 @@ def create_supervisor_cards_with_export(supervisors: List[SupervisorInfo], schoo
     filename = filename + '.pdf'
 
     # Export button
-    with ui.row().classes('w-full justify-end q-mb-sm'):
+    with ui.row().classes('w-full justify-end q-mb-md'):
         def do_export_pdf():
             data = _export_pdf(supervisors)
             ui.download(data, filename=filename)
-
-        ui.button('导出 PDF', on_click=do_export_pdf, icon='picture_as_pdf').props('color=secondary outline')
+        ui.button('导出 PDF', on_click=do_export_pdf, icon='picture_as_pdf').props('color=primary outline').style('border-radius: 8px;')
 
     # 显示所有导师卡片
     for supervisor in supervisors:
@@ -253,12 +265,11 @@ def create_supervisor_table(supervisors: List[SupervisorInfo], school: str = Non
     filename = filename + '.xlsx'
 
     # Export button
-    with ui.row().classes('w-full justify-end q-mb-sm'):
+    with ui.row().classes('w-full justify-end q-mb-md'):
         def do_export():
             data = _export_excel(supervisors)
             ui.download(data, filename=filename)
-
-        ui.button('导出 Excel', on_click=do_export, icon='download').props('color=secondary outline')
+        ui.button('导出 Excel', on_click=do_export, icon='download').props('color=primary outline').style('border-radius: 8px;')
 
     columns = [
         {'name': 'school_level', 'label': '学校层次', 'field': 'school_level', 'align': 'left', 'sortable': True},
@@ -285,7 +296,7 @@ def create_supervisor_table(supervisors: List[SupervisorInfo], school: str = Non
         for s in supervisors
     ]
 
-    table = ui.table(columns=columns, rows=rows, row_key='name').classes('w-full').props('flat bordered')
+    table = ui.table(columns=columns, rows=rows, row_key='name').classes('w-full').props('flat bordered separator=horizontal').style('border-radius: 8px; overflow: hidden;')
 
     # 自定义个人主页列为超链接
     table.add_slot('body-cell-homepage', '''

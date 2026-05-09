@@ -25,5 +25,8 @@ Thumbs.db
 outputs/*.xlsx
 outputs/*.pdf
 
+# NiceGUI
+.nicegui/
+
 # Deploy artifacts
 deploy/nginx.conf
