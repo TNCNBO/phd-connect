@@ -11,98 +11,101 @@ from reportlab.pdfbase.ttfonts import TTFont
 from models.schemas import SupervisorInfo
 
 import os as _os
-import subprocess as _sp
+import urllib.request as _req
 import logging as _log
 
+_FONT_DIR = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), '.fonts')
+_FONT_REGULAR = _os.path.join(_FONT_DIR, 'NotoSansSC-Regular.ttf')
+_FONT_BOLD = _os.path.join(_FONT_DIR, 'NotoSansSC-Bold.ttf')
 def _register_cn_font():
-    """跨平台注册中文字体，返回 (普通字体名, 粗体字体名)"""
-    _regular = 'Helvetica'
-    _bold = 'Helvetica-Bold'
+    """跨平台注册中文字体，返回 (普通字体名, 粗体字体名)，自动下载字体"""
+
+    def _try_register(key, path, subfont=0):
+        try:
+            pdfmetrics.registerFont(TTFont(key, path, subfontIndex=subfont))
+            _log.info('pdf_font: %s -> %s', path, key)
+            return True
+        except Exception as _e:
+            _log.warning('pdf_font_failed: %s error=%s', path, _e)
+            return False
+
+    _reg = None
+    _bold = None
 
     if _os.name == 'nt':
-        _paths = [
-            ('SimSun', 'C:/Windows/Fonts/simsun.ttc'),
-            ('SimHei', 'C:/Windows/Fonts/simhei.ttf'),
-            ('SimSun', 'C:/Windows/Fonts/simsun.ttf'),
-        ]
+        # Windows: 系统自带宋体/黑体
+        for _key, _full in [('SimHei', 'C:/Windows/Fonts/simhei.ttf'),
+                            ('SimSun', 'C:/Windows/Fonts/simsun.ttc'),
+                            ('SimSun', 'C:/Windows/Fonts/simsun.ttf')]:
+            if _os.path.exists(_full):
+                _is_b = _key == 'SimHei'
+                if _try_register(_key, _full):
+                    if _is_b:
+                        _bold = _key
+                    else:
+                        _reg = _key
+                    if _reg and _bold:
+                        return _reg, _bold
     else:
-        # 优先用 fc-list 动态查找（最可靠）
-        _paths = _find_fonts_via_fc_list()
-        if not _paths:
-            _paths = _find_fonts_via_find()
+        # Linux: 扫描字体目录，TTC 用 subfontIndex=2（简体中文）
+        for _dir in ['/usr/share/fonts', '/usr/local/share/fonts']:
+            try:
+                for _root, _dirs, _files in _os.walk(_dir):
+                    for _f in sorted(_files):
+                        if not _f.endswith(('.ttf', '.ttc', '.otf')):
+                            continue
+                        _low = _f.lower()
+                        if not any(_k in _low for _k in (
+                            'cjk', 'cn', 'sc', 'hans', 'wenquan', 'wqy',
+                            'droid', 'arphic', 'noto', 'chinese'
+                        )):
+                            continue
+                        _full = _os.path.join(_root, _f)
+                        _is_b = 'bold' in _low or 'hei' in _low
+                        _sub = 2 if _f.endswith('.ttc') else 0
+                        _key = _f.rsplit('.', 1)[0].replace('-', '_').replace(' ', '_')
+                        if _try_register(_key, _full, _sub):
+                            if _is_b:
+                                _bold = _key
+                            else:
+                                _reg = _key
+                            if _reg and _bold:
+                                return _reg, _bold
+            except Exception:
+                pass
 
-    _loaded_regular = False
-    for _name, _path in _paths:
+    # 2) 系统字体不可用 → 下载项目自带字体
+    _os.makedirs(_FONT_DIR, exist_ok=True)
+    _dl_urls = [
+        'https://cdn.jsdelivr.net/gh/notofonts/noto-cjk@main/Sans/SubsetOTF/CN',
+        'https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/CN',
+        'https://ghproxy.net/https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/CN',
+    ]
+    _pairs = [('NotoSansSC-Regular', _FONT_REGULAR, False),
+              ('NotoSansSC-Bold', _FONT_BOLD, True)]
+    for _fname, _path, _is_b in _pairs:
         if not _os.path.exists(_path):
-            continue
-        try:
-            _key = f'{_name}_{_os.path.basename(_path).split(".")[0]}'
-            _key = _key.replace('-', '_').replace(' ', '_')
-            pdfmetrics.registerFont(TTFont(_key, _path))
-            _log.info('pdf_font_registered: %s -> %s', _path, _key)
-            if 'Bold' in _path or 'bold' in _path or 'Hei' in _name:
-                _bold = _key
-            elif not _loaded_regular:
-                _regular = _key
-                _loaded_regular = True
-        except Exception as _e:
-            _log.warning('pdf_font_register_failed: %s error=%s', _path, _e)
+            for _base in _dl_urls:
+                _url = f'{_base}/{_fname}.otf'
+                _log.info('pdf_font_download: %s', _url)
+                try:
+                    _req.urlretrieve(_url, _path)
+                    break
+                except Exception as _e:
+                    _log.warning('pdf_font_download_failed: %s error=%s', _url, _e)
+        if _os.path.exists(_path):
+            _key = _fname.replace('-', '_')
+            if _try_register(_key, _path):
+                if _is_b:
+                    _bold = _key
+                else:
+                    _reg = _key
 
-    _log.info('pdf_font_selected: regular=%s bold=%s', _regular, _bold)
-    return _regular, _bold
-
-
-def _find_fonts_via_fc_list():
-    """通过 fc-list 命令查找系统中文字体"""
-    try:
-        _out = _sp.check_output(['fc-list', ':lang=zh', 'file'], text=True, timeout=5)
-    except Exception:
-        return []
-    _paths = []
-    for _line in _out.strip().split('\n'):
-        _path = _line.split(':')[0].strip() if ':' in _line else _line.strip()
-        if not _path or not _os.path.exists(_path):
-            continue
-        _base = _os.path.basename(_path).lower()
-        _name = 'NotoSansCJK'
-        if 'wenquan' in _base or 'wqy' in _base:
-            _name = 'WenQuanYi'
-        elif 'droid' in _base:
-            _name = 'DroidSans'
-        elif 'song' in _base or 'simsun' in _base:
-            _name = 'SimSun'
-        elif 'hei' in _base:
-            _name = 'SimHei'
-        _paths.append((_name, _path))
-    return _paths
-
-
-def _find_fonts_via_find():
-    """通过 find 命令扫描字体目录"""
-    _paths = []
-    _dirs = ['/usr/share/fonts', '/usr/local/share/fonts']
-    for _dir in _dirs:
-        try:
-            _out = _sp.check_output(
-                ['find', _dir, '-name', '*.ttc', '-o', '-name', '*.ttf'], text=True, timeout=10
-            )
-        except Exception:
-            continue
-        for _line in _out.strip().split('\n'):
-            _line = _line.strip()
-            if not _line:
-                continue
-            _base = _os.path.basename(_line).lower()
-            if not any(_kw in _base for _kw in ('cjk', 'cn', 'sc', 'chinese', 'wenquan', 'wqy',
-                                                  'droid', 'arphic', 'cwtex', 'noto', 'hans')):
-                continue
-            _name = 'NotoSansCJK'
-            if 'wenquan' in _base or 'wqy' in _base:
-                _name = 'WenQuanYi'
-            elif 'droid' in _base:
-                _name = 'DroidSans'
-            _paths.append((_name, _line))
-    return _paths
+    if not _reg and _bold:
+        _reg = _bold
+    if not _bold and _reg:
+        _bold = _reg
+    return _reg or 'Helvetica', _bold or 'Helvetica-Bold'
 
 
 def create_search_form(on_search: Callable):
