@@ -1,12 +1,9 @@
-import sys
 import os
 from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-import PhD_Connect.app  # 注册 @ui.page 路由
+import app  # 注册 @ui.page 路由  # noqa: E402
 from nicegui import ui
 
 if __name__ == "__main__":
