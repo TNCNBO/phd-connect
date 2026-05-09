@@ -21,7 +21,7 @@ logger = structlog.get_logger(__name__)
 MAX_TURNS = 6  # hard limit
 MAX_NO_PROGRESS = 2  # 连续无进展轮数，达到后强制输出
 
-ALL_TOOLS = [ddg_search, tavily_search, tavily_crawl, jina_reader]
+ALL_TOOLS = [tavily_search, ddg_search, tavily_crawl, jina_reader]
 TOOL_BY_NAME = {t.name: t for t in ALL_TOOLS}
 
 
