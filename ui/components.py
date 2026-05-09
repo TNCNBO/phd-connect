@@ -127,6 +127,12 @@ def create_search_form(on_search: Callable):
                     names_str,
                     level,
                 )
+                # 搜索完成后清空输入框
+                school_input.value = ''
+                major_input.value = ''
+                school_level_select.value = '无'
+                for inp in supervisor_inputs:
+                    inp.value = ''
 
             search_btn.on('click', _on_click)
 
