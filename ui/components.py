@@ -49,19 +49,17 @@ def _init_font():
                 if _CN_FONT and _CN_FONT_BOLD:
                     return
     else:
-        # Linux: 已知常见路径，避免 os.walk 性能问题
+        # Linux: TrueType 字体优先（Noto CJK 是 PostScript 轮廓不兼容）
         _known = [
-            # Ubuntu/Debian fonts-noto-cjk (TTC 合集，简体中文是 subfont 2)
-            ('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc', False, 2),
-            ('/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc', True, 2),
-            ('/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc', False, 2),
-            ('/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc', True, 2),
-            # 独立 OTF/TTF
-            ('/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf', False, 0),
-            ('/usr/share/fonts/opentype/noto/NotoSansCJKsc-Bold.otf', True, 0),
-            ('/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc', False, 0),
+            # WenQuanYi Micro Hei — TrueType, apt: fonts-wqy-microhei
             ('/usr/share/fonts/truetype/wqy/wqy-microhei.ttc', False, 0),
+            # DroidSans Fallback — TrueType, Android 开源字体
             ('/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf', False, 0),
+            # WenQuanYi Zen Hei
+            ('/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc', False, 0),
+            # 项目自带字体（可选手动放入 .fonts/ 目录）
+            (_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+                          '.fonts', 'chinese.ttf'), False, 0),
         ]
         for _path, _is_bold, _sub in _known:
             if not _os.path.exists(_path):
