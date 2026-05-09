@@ -5,9 +5,9 @@ import structlog
 from dotenv import load_dotenv
 from nicegui import ui, app
 
-from PhD_Connect.services.search_service import SupervisorSearchService
-from PhD_Connect.models.schemas import SearchRequest
-from PhD_Connect.ui.components import create_search_form, create_supervisor_cards_with_export, create_supervisor_table
+from services.search_service import SupervisorSearchService
+from models.schemas import SearchRequest
+from ui.components import create_search_form, create_supervisor_cards_with_export, create_supervisor_table
 
 # structlog setup (matches src/config/logging_config.py pattern)
 logging.basicConfig(format="%(message)s", level=logging.INFO)

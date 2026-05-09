@@ -5,7 +5,7 @@ from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from PhD_Connect.models.schemas import SupervisorInfo
+from models.schemas import SupervisorInfo
 import os
 
 

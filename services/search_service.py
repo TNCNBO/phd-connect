@@ -1,8 +1,8 @@
 import random
 import structlog
-from PhD_Connect.models.schemas import SearchRequest, SearchResponse
-from PhD_Connect.agent.supervisor import SupervisorAgent
-from PhD_Connect.data.school_levels import SCHOOLS_985 as _SCHOOLS_985_SET, SCHOOLS_211 as _SCHOOLS_211_SET
+from models.schemas import SearchRequest, SearchResponse
+from agent.supervisor import SupervisorAgent
+from data.school_levels import SCHOOLS_985 as _SCHOOLS_985_SET, SCHOOLS_211 as _SCHOOLS_211_SET
 
 logger = structlog.get_logger(__name__)
 

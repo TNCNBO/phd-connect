@@ -8,7 +8,7 @@ from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from PhD_Connect.models.schemas import SupervisorInfo
+from models.schemas import SupervisorInfo
 
 
 def create_search_form(on_search: Callable):

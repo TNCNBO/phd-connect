@@ -5,16 +5,16 @@ import re
 import structlog
 from langchain_deepseek import ChatDeepSeek
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
-from PhD_Connect.agent.tools import ddg_search, jina_reader, tavily_crawl, tavily_search
-from PhD_Connect.agent.prompts import (
+from agent.tools import ddg_search, jina_reader, tavily_crawl, tavily_search
+from agent.prompts import (
     SUPERVISOR_SEARCH_SYSTEM_PROMPT,
     SUPERVISOR_DETAIL_WITH_CONTEXT_PROMPT,
     SUPERVISOR_NAME_ONLY_PROMPT,
     SUPERVISOR_LIST_PROMPT,
     SUPERVISOR_MULTI_SCHOOL_PROMPT,
 )
-from PhD_Connect.models.schemas import SupervisorInfo
-from PhD_Connect.data.school_levels import get_school_level
+from models.schemas import SupervisorInfo
+from data.school_levels import get_school_level
 
 logger = structlog.get_logger(__name__)
 
