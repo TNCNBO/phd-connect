@@ -11,40 +11,98 @@ from reportlab.pdfbase.ttfonts import TTFont
 from models.schemas import SupervisorInfo
 
 import os as _os
+import subprocess as _sp
+import logging as _log
 
 def _register_cn_font():
     """跨平台注册中文字体，返回 (普通字体名, 粗体字体名)"""
-    _font_paths = []
+    _regular = 'Helvetica'
+    _bold = 'Helvetica-Bold'
+
     if _os.name == 'nt':
-        _font_paths = [
+        _paths = [
             ('SimSun', 'C:/Windows/Fonts/simsun.ttc'),
             ('SimHei', 'C:/Windows/Fonts/simhei.ttf'),
             ('SimSun', 'C:/Windows/Fonts/simsun.ttf'),
         ]
     else:
-        _font_paths = [
-            ('NotoSansCJK', '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'),
-            ('NotoSansCJK', '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc'),
-            ('NotoSansCJK', '/usr/share/fonts/noto/NotoSansCJK-Regular.ttc'),
-            ('WenQuanYi', '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc'),
-            ('DroidSans', '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf'),
-            ('NotoSansCJK', '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc'),
-            ('NotoSansCJK', '/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc'),
-        ]
-    _regular = 'Helvetica'
-    _bold = 'Helvetica-Bold'
-    for _name, _path in _font_paths:
-        if _os.path.exists(_path):
-            try:
-                _key = f'{_name}_{_os.path.basename(_path).split(".")[0]}'
-                pdfmetrics.registerFont(TTFont(_key, _path))
-                if 'Bold' in _path or 'bold' in _path or _name == 'SimHei':
-                    _bold = _key
-                else:
-                    _regular = _key
-            except Exception:
-                pass
+        # 优先用 fc-list 动态查找（最可靠）
+        _paths = _find_fonts_via_fc_list()
+        if not _paths:
+            _paths = _find_fonts_via_find()
+
+    _loaded_regular = False
+    for _name, _path in _paths:
+        if not _os.path.exists(_path):
+            continue
+        try:
+            _key = f'{_name}_{_os.path.basename(_path).split(".")[0]}'
+            _key = _key.replace('-', '_').replace(' ', '_')
+            pdfmetrics.registerFont(TTFont(_key, _path))
+            _log.info('pdf_font_registered: %s -> %s', _path, _key)
+            if 'Bold' in _path or 'bold' in _path or 'Hei' in _name:
+                _bold = _key
+            elif not _loaded_regular:
+                _regular = _key
+                _loaded_regular = True
+        except Exception as _e:
+            _log.warning('pdf_font_register_failed: %s error=%s', _path, _e)
+
+    _log.info('pdf_font_selected: regular=%s bold=%s', _regular, _bold)
     return _regular, _bold
+
+
+def _find_fonts_via_fc_list():
+    """通过 fc-list 命令查找系统中文字体"""
+    try:
+        _out = _sp.check_output(['fc-list', ':lang=zh', 'file'], text=True, timeout=5)
+    except Exception:
+        return []
+    _paths = []
+    for _line in _out.strip().split('\n'):
+        _path = _line.split(':')[0].strip() if ':' in _line else _line.strip()
+        if not _path or not _os.path.exists(_path):
+            continue
+        _base = _os.path.basename(_path).lower()
+        _name = 'NotoSansCJK'
+        if 'wenquan' in _base or 'wqy' in _base:
+            _name = 'WenQuanYi'
+        elif 'droid' in _base:
+            _name = 'DroidSans'
+        elif 'song' in _base or 'simsun' in _base:
+            _name = 'SimSun'
+        elif 'hei' in _base:
+            _name = 'SimHei'
+        _paths.append((_name, _path))
+    return _paths
+
+
+def _find_fonts_via_find():
+    """通过 find 命令扫描字体目录"""
+    _paths = []
+    _dirs = ['/usr/share/fonts', '/usr/local/share/fonts']
+    for _dir in _dirs:
+        try:
+            _out = _sp.check_output(
+                ['find', _dir, '-name', '*.ttc', '-o', '-name', '*.ttf'], text=True, timeout=10
+            )
+        except Exception:
+            continue
+        for _line in _out.strip().split('\n'):
+            _line = _line.strip()
+            if not _line:
+                continue
+            _base = _os.path.basename(_line).lower()
+            if not any(_kw in _base for _kw in ('cjk', 'cn', 'sc', 'chinese', 'wenquan', 'wqy',
+                                                  'droid', 'arphic', 'cwtex', 'noto', 'hans')):
+                continue
+            _name = 'NotoSansCJK'
+            if 'wenquan' in _base or 'wqy' in _base:
+                _name = 'WenQuanYi'
+            elif 'droid' in _base:
+                _name = 'DroidSans'
+            _paths.append((_name, _line))
+    return _paths
 
 
 def create_search_form(on_search: Callable):
