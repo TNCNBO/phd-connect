@@ -7,17 +7,54 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.pdfbase.ttfonts import TTFont
 from models.schemas import SupervisorInfo
+import os as _os
 
 _CN_FONT = None
 _CN_FONT_BOLD = None
 
+_FONT_CANDIDATES = [
+    # Windows
+    ('C:/Windows/Fonts/simhei.ttf', True, 0),
+    ('C:/Windows/Fonts/simsun.ttc', False, 0),
+    ('C:/Windows/Fonts/simsun.ttf', False, 0),
+    # Linux 文泉驿微米黑 — TrueType，字形完整
+    ('/usr/share/fonts/truetype/wqy/wqy-microhei.ttc', True, 0),
+    ('/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc', False, 0),
+    ('/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf', False, 0),
+]
+
 
 def _init_font():
-    """注册内置 CJK 字体，无需外部字体文件，跨平台通用"""
+    """注册中文字体：TrueType 系统字体 > CID 内置字体"""
     global _CN_FONT, _CN_FONT_BOLD
+
+    for _path, _is_bold, _sub in _FONT_CANDIDATES:
+        if not _os.path.exists(_path):
+            continue
+        try:
+            _key = _os.path.basename(_path).rsplit('.', 1)[0].replace('-', '_')
+            pdfmetrics.registerFont(TTFont(_key, _path, subfontIndex=_sub))
+            if _is_bold:
+                _CN_FONT_BOLD = _key
+            if not _CN_FONT:
+                _CN_FONT = _key
+            if _CN_FONT and _CN_FONT_BOLD:
+                return
+        except Exception:
+            pass
+
+    if _CN_FONT and not _CN_FONT_BOLD:
+        _CN_FONT_BOLD = _CN_FONT
+    if _CN_FONT_BOLD and not _CN_FONT:
+        _CN_FONT = _CN_FONT_BOLD
+    if _CN_FONT:
+        return
+
+    # 兜底：ReportLab 内置 CID 字体
     try:
+        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
         pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
         _CN_FONT = 'STSong-Light'
         _CN_FONT_BOLD = 'STSong-Light'
