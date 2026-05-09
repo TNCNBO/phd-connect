@@ -1,14 +1,23 @@
-# Stage 1: Install dependencies with uv
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm AS builder
-WORKDIR /app
-COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-install-project
-
-# Stage 2: Runtime
 FROM python:3.13-slim-bookworm
+
+ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+
 WORKDIR /app
-COPY --from=builder /app/.venv .venv
+
+RUN pip install --no-cache-dir \
+    nicegui>=2.5.0 \
+    langchain-deepseek>=0.1.0 \
+    langchain-tavily>=0.1.0 \
+    tavily-python>=0.5.0 \
+    pydantic>=2.0.0 \
+    python-dotenv>=1.0.0 \
+    httpx>=0.27.0 \
+    structlog>=24.0.0 \
+    reportlab>=4.0.0 \
+    openpyxl>=3.1.0 \
+    ddgs>=9.14.2
+
 COPY . .
-ENV PATH="/app/.venv/bin:$PATH"
+
 EXPOSE 8080
 CMD ["python", "main.py"]
