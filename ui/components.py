@@ -10,6 +10,42 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from models.schemas import SupervisorInfo
 
+import os as _os
+
+def _register_cn_font():
+    """跨平台注册中文字体，返回 (普通字体名, 粗体字体名)"""
+    _font_paths = []
+    if _os.name == 'nt':
+        _font_paths = [
+            ('SimSun', 'C:/Windows/Fonts/simsun.ttc'),
+            ('SimHei', 'C:/Windows/Fonts/simhei.ttf'),
+            ('SimSun', 'C:/Windows/Fonts/simsun.ttf'),
+        ]
+    else:
+        _font_paths = [
+            ('NotoSansCJK', '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'),
+            ('NotoSansCJK', '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc'),
+            ('NotoSansCJK', '/usr/share/fonts/noto/NotoSansCJK-Regular.ttc'),
+            ('WenQuanYi', '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc'),
+            ('DroidSans', '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf'),
+            ('NotoSansCJK', '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc'),
+            ('NotoSansCJK', '/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc'),
+        ]
+    _regular = 'Helvetica'
+    _bold = 'Helvetica-Bold'
+    for _name, _path in _font_paths:
+        if _os.path.exists(_path):
+            try:
+                _key = f'{_name}_{_os.path.basename(_path).split(".")[0]}'
+                pdfmetrics.registerFont(TTFont(_key, _path))
+                if 'Bold' in _path or 'bold' in _path or _name == 'SimHei':
+                    _bold = _key
+                else:
+                    _regular = _key
+            except Exception:
+                pass
+    return _regular, _bold
+
 
 def create_search_form(on_search: Callable):
     """创建搜索表单，返回查询按钮"""
@@ -81,28 +117,22 @@ def _export_pdf(supervisors: List[SupervisorInfo]) -> bytes:
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=2*cm, bottomMargin=2*cm)
 
-    # 注册中文字体（使用系统自带的字体）
-    try:
-        # Windows 系统字体路径
-        pdfmetrics.registerFont(TTFont('SimSun', 'C:/Windows/Fonts/simsun.ttc'))
-        pdfmetrics.registerFont(TTFont('SimHei', 'C:/Windows/Fonts/simhei.ttf'))
-    except:
-        # 如果字体加载失败，使用默认字体（可能无法显示中文）
-        pass
+    # 注册中文字体（跨平台自动查找）
+    _cn_font, _cn_font_bold = _register_cn_font()
 
     # 定义样式
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading1'],
-        fontName='SimHei',
+        fontName=_cn_font_bold,
         fontSize=18,
         spaceAfter=12,
     )
     normal_style = ParagraphStyle(
         'CustomNormal',
         parent=styles['Normal'],
-        fontName='SimSun',
+        fontName=_cn_font,
         fontSize=12,
         leading=20,
     )
