@@ -7,85 +7,28 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from models.schemas import SupervisorInfo
 
-import os as _os
-import logging as _log
-
-# 启动时预加载，不阻塞首次导出
 _CN_FONT = None
 _CN_FONT_BOLD = None
 
 
 def _init_font():
-    """模块加载时调用一次，注册中文字体"""
+    """注册内置 CJK 字体，无需外部字体文件，跨平台通用"""
     global _CN_FONT, _CN_FONT_BOLD
-
-    def _try(key, path, subfont=0):
-        try:
-            pdfmetrics.registerFont(TTFont(key, path, subfontIndex=subfont))
-            _log.info('pdf_font: %s -> %s', path, key)
-            return key
-        except Exception as _e:
-            _log.warning('pdf_font_failed: %s error=%s', path, _e)
-            return None
-
-    if _os.name == 'nt':
-        _pairs = [
-            ('SimHei', 'C:/Windows/Fonts/simhei.ttf', 0),
-            ('SimSun', 'C:/Windows/Fonts/simsun.ttc', 0),
-            ('SimSun', 'C:/Windows/Fonts/simsun.ttf', 0),
-        ]
-        for _name, _path, _sub in _pairs:
-            if not _os.path.exists(_path):
-                continue
-            _r = _try(_name, _path, _sub)
-            if _r:
-                if _name == 'SimHei':
-                    _CN_FONT_BOLD = _r
-                else:
-                    _CN_FONT = _r
-                if _CN_FONT and _CN_FONT_BOLD:
-                    return
-    else:
-        # Linux: TrueType 字体优先（Noto CJK 是 PostScript 轮廓不兼容）
-        _known = [
-            # WenQuanYi Micro Hei — TrueType, apt: fonts-wqy-microhei
-            ('/usr/share/fonts/truetype/wqy/wqy-microhei.ttc', False, 0),
-            # DroidSans Fallback — TrueType, Android 开源字体
-            ('/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf', False, 0),
-            # WenQuanYi Zen Hei
-            ('/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc', False, 0),
-            # 项目自带字体（可选手动放入 .fonts/ 目录）
-            (_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
-                          '.fonts', 'chinese.ttf'), False, 0),
-        ]
-        for _path, _is_bold, _sub in _known:
-            if not _os.path.exists(_path):
-                continue
-            _name = _os.path.basename(_path).rsplit('.', 1)[0].replace('-', '_')
-            _r = _try(_name, _path, _sub)
-            if _r:
-                if _is_bold:
-                    _CN_FONT_BOLD = _r
-                elif not _CN_FONT:
-                    _CN_FONT = _r
-                if _CN_FONT and _CN_FONT_BOLD:
-                    return
-
-    # 回退：粗体=普通
-    if _CN_FONT and not _CN_FONT_BOLD:
-        _CN_FONT_BOLD = _CN_FONT
-    if _CN_FONT_BOLD and not _CN_FONT:
-        _CN_FONT = _CN_FONT_BOLD
+    try:
+        pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
+        _CN_FONT = 'STSong-Light'
+        _CN_FONT_BOLD = 'STSong-Light'
+    except Exception:
+        pass
 
 
 def _register_cn_font():
-    """返回已注册的 (普通字体名, 粗体字体名)"""
     if _CN_FONT is None:
         _init_font()
-    return _CN_FONT or 'Helvetica', _CN_FONT_BOLD or _CN_FONT or 'Helvetica-Bold'
+    return _CN_FONT or 'Helvetica', _CN_FONT_BOLD or 'Helvetica-Bold'
 
 
 def create_search_form(on_search: Callable):
