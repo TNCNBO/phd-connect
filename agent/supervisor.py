@@ -5,7 +5,7 @@ import re
 import structlog
 from langchain_deepseek import ChatDeepSeek
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
-from agent.tools import ddg_search, jina_reader, tavily_crawl, tavily_search
+from agent.tools import jina_reader, tavily_crawl, tavily_search
 from agent.prompts import (
     SUPERVISOR_SEARCH_SYSTEM_PROMPT,
     SUPERVISOR_DETAIL_WITH_CONTEXT_PROMPT,
@@ -18,10 +18,10 @@ from data.school_levels import get_school_level
 
 logger = structlog.get_logger(__name__)
 
-MAX_TURNS = 6  # hard limit
+MAX_TURNS = 4  # hard limit
 MAX_NO_PROGRESS = 2  # 连续无进展轮数，达到后强制输出
 
-ALL_TOOLS = [tavily_search, ddg_search, tavily_crawl, jina_reader]
+ALL_TOOLS = [tavily_search, tavily_crawl, jina_reader]
 TOOL_BY_NAME = {t.name: t for t in ALL_TOOLS}
 
 
@@ -196,7 +196,7 @@ def _cap_tool_result(tool_name: str, content: str) -> str:
             results = json.loads(content)
             if isinstance(results, list):
                 # jina_reader 返回 [{url, content, truncated}, ...]
-                # 保留更多内容，总字符数限制 70000
+                # 保留更多内容，总字符数限制 200000
                 capped = []
                 total_chars = 0
                 for item in results:
@@ -209,16 +209,16 @@ def _cap_tool_result(tool_name: str, content: str) -> str:
                         }
                         capped.append(capped_item)
                         total_chars += len(item_content)
-                        # 总字符数超过 70000 就停止
-                        if total_chars > 70000:
+                        # 总字符数超过 200000 就停止
+                        if total_chars > 200_000:
                             break
                     else:
                         capped.append(item)
                 return json.dumps(capped, ensure_ascii=False)
         except (json.JSONDecodeError, TypeError):
-            # 如果不是 JSON，直接截断到 70000
-            if len(content) > 70000:
-                return content[:70000]
+            # 如果不是 JSON，直接截断到 200000
+            if len(content) > 200_000:
+                return content[:200_000]
         return content
 
     # 其他工具：通用截断
@@ -275,7 +275,7 @@ class SupervisorAgent:
     def __init__(self):
         logger.info("agent_init")
         base_llm = ChatDeepSeek(
-            model="deepseek-chat",
+            model="deepseek-v4-flash",
             api_key=os.getenv("DEEPSEEK_API_KEY"),
             temperature=0,
             max_tokens=16384,
@@ -386,24 +386,23 @@ class SupervisorAgent:
         total_search_results = 0
         total_reader_chars = 0
 
-        for tr in tool_results:
+        for i, tr in enumerate(tool_results):
+            name = tool_names[i] if i < len(tool_names) else "?"
             content = tr.content if hasattr(tr, 'content') else str(tr)
-            if isinstance(content, str):
+
+            if name in ("tavily_search", "ddg_search"):
                 try:
-                    data = json.loads(content)
+                    data = json.loads(content) if isinstance(content, str) else content
+                    total_search_results += len(data) if isinstance(data, list) else 1
                 except (json.JSONDecodeError, TypeError):
-                    if len(content) > 100:
-                        total_reader_chars += len(content)
-                    continue
-                if isinstance(data, list) and data and isinstance(data[0], dict):
-                    keys = data[0].keys()
-                    if "snippet" in keys:
-                        total_search_results += len(data)
-                    elif "content" in keys:
-                        for item in data:
-                            total_reader_chars += len(item.get("content", ""))
-            elif isinstance(content, list):
-                total_search_results += len(content)
+                    # Formatted by _cap_tool_result as "搜索结果 (N 条):\n..."
+                    m = re.search(r'搜索结果 \((\d+) 条\)', str(content))
+                    total_search_results += int(m.group(1)) if m else 1
+            elif name in ("tavily_crawl", "jina_reader"):
+                if isinstance(content, str):
+                    total_reader_chars += len(content)
+                elif isinstance(content, list):
+                    total_reader_chars += sum(len(str(item)) for item in content)
 
         parts = []
         if total_search_results:
@@ -571,10 +570,7 @@ class SupervisorAgent:
             for tc in response.tool_calls:
                 name = tc.get("name", "")
                 args = tc.get("args", {})
-                if name == "ddg_search":
-                    q = args.get("query", "") if isinstance(args, dict) else ""
-                    yield {"type": "status", "text": f"DuckDuckGo 搜索: {q}"}
-                elif name == "tavily_search":
+                if name == "tavily_search":
                     q = args.get("query", "") if isinstance(args, dict) else ""
                     yield {"type": "status", "text": f"Tavily 搜索: {q}"}
                 elif name == "tavily_crawl":

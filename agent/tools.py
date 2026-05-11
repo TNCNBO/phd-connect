@@ -8,6 +8,11 @@ from langchain_core.tools import tool
 
 logger = structlog.get_logger(__name__)
 
+# Concurrency limits — prevent overwhelming upstream APIs
+_search_semaphore = asyncio.Semaphore(4)   # max 4 concurrent searches
+_crawl_semaphore = asyncio.Semaphore(6)    # max 6 concurrent crawls
+_reader_semaphore = asyncio.Semaphore(10)  # max 10 concurrent reader requests
+
 # === DuckDuckGo Search (free, works from China) ===
 
 @tool
@@ -102,11 +107,14 @@ async def jina_reader(urls: list[str], signal=None) -> str:
 
     if isinstance(urls, str):
         urls = [urls]
-    urls = urls[:5]  # max 5 URLs per call
+
+    async def _fetch_with_limit(u):
+        async with _reader_semaphore:
+            return await _fetch_jina(u, client, MAX_RESULT_CHARS)
 
     timeout = httpx.Timeout(30.0, connect=10.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
-        tasks = [_fetch_jina(u, client, MAX_RESULT_CHARS) for u in urls]
+        tasks = [_fetch_with_limit(u) for u in urls]
         results = await asyncio.gather(*tasks)
 
     logger.info("jina_reader_ok", urls=len(urls), total_chars=sum(len(r["content"]) for r in results))
@@ -192,7 +200,8 @@ async def tavily_search(
         kwargs["exclude_domains"] = blocked_domains
 
     try:
-        response = await asyncio.to_thread(client.search, **kwargs)
+        async with _search_semaphore:
+            response = await asyncio.to_thread(client.search, **kwargs)
         results = []
         for r in response.get("results", []):
             results.append({
@@ -251,7 +260,8 @@ async def tavily_crawl(
         kwargs["include_domains"] = allowed_domains
 
     try:
-        response = await asyncio.to_thread(client.crawl, **kwargs)
+        async with _crawl_semaphore:
+            response = await asyncio.to_thread(client.crawl, **kwargs)
         results = []
         for r in response.get("results", []):
             raw = r.get("raw_content", "") or ""
